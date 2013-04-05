@@ -32,4 +32,9 @@ object pascal {
                                                   //| 1 9 36 84 126 126 84 36 9 1 
                                                   //| 1 10 45 120 210 252 210 120 45 10 1 
   
+  pascal(-1, 0)                                   //> res0: Int = 1
+  pascal(-1, -1)                                  //> res1: Int = 1
+  pascal(1, -4)                                   //> res2: Int = 0
+  
+  
 }

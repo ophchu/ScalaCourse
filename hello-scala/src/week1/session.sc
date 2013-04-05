@@ -9,7 +9,7 @@ object session {
       if (isGoodEnough(guess)) guess
       else sqrIter(improve(guess))
 
-    def isGoodEnough(guess: Double) =
+    def isGoodEnough(guess: Double) :Boolean =
       abs(guess * guess - x) < 0.001
 
     def improve(guess: Double) =
