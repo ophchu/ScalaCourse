@@ -18,9 +18,8 @@ object FunSets {
   /**
    * Returns the set of the one given element.
    */
-  
-  def singletonSet(elem: Int): Set =  x => (x == elem)
 
+  def singletonSet(elem: Int): Set = x => (x == elem)
 
   /**
    * Returns the union of the two given sets,
@@ -43,7 +42,7 @@ object FunSets {
   /**
    * Returns the subset of `s` for which `p` holds.
    */
-  def filter(s: Set, p: Int => Boolean): Set = ???
+  def filter(s: Set, p: Int => Boolean): Set = x => contains(p, x) && contains(s, x)
 
   /**
    * The bounds for `forall` and `exists` are +/- 1000.
@@ -53,20 +52,21 @@ object FunSets {
   /**
    * Returns whether all bounded integers within `s` satisfy `p`.
    */
+  val lim = 10
   def forall(s: Set, p: Int => Boolean): Boolean = {
     def iter(a: Int): Boolean = {
-      if (???) ???
-      else if (???) ???
-      else iter(???)
+      if (!contains(filter(s, p), a)) false
+      else if (a >= lim) true
+      else iter(a + 1)
     }
-    iter(???)
+    iter(-lim)
   }
 
   /**
    * Returns whether there exists a bounded integer within `s`
    * that satisfies `p`.
    */
-  def exists(s: Set, p: Int => Boolean): Boolean = ???
+  def exists(s: Set, p: Int => Boolean): Boolean = forall(s, union(s, p))
 
   /**
    * Returns a set transformed by applying `f` to each element of `s`.
