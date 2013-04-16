@@ -47,26 +47,26 @@ object FunSets {
   /**
    * The bounds for `forall` and `exists` are +/- 1000.
    */
-  val bound = 1000
+  val bound = 10
 
   /**
    * Returns whether all bounded integers within `s` satisfy `p`.
    */
-  val lim = 10
   def forall(s: Set, p: Int => Boolean): Boolean = {
     def iter(a: Int): Boolean = {
+      println(a)
       if (!contains(filter(s, p), a)) false
-      else if (a >= lim) true
+      else if (a >= bound) true
       else iter(a + 1)
     }
-    iter(-lim)
+    iter(-bound)
   }
 
   /**
    * Returns whether there exists a bounded integer within `s`
    * that satisfies `p`.
    */
-  def exists(s: Set, p: Int => Boolean): Boolean = forall(s, union(s, p))
+  def exists(s: Set, p: Int => Boolean): Boolean = !forall(s, p)
 
   /**
    * Returns a set transformed by applying `f` to each element of `s`.
