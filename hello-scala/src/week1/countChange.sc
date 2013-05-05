@@ -14,11 +14,11 @@ object countChange {
 	    0
     }
     calc(0, coins)
-  }                                               //> countChange: (money: Int, coins: List[Int])Int
-  countChange(3, List(1, 2,3))                    //> res0: Int = 3
-  countChange(4, List(1, 2, 3))                   //> res1: Int = 4
-  countChange(3, List(1, 2, 3))                   //> res2: Int = 3
-  countChange(300,List(5,10,20,50,100,200,500))   //> res3: Int = 1022
-  countChange(300,List(500,5,50,100,20,200,10))   //> res4: Int = 1022
+  }
+  countChange(3, List(1, 2,3))
+  countChange(4, List(1, 2, 3))
+  countChange(3, List(1, 2, 3))
+  countChange(300,List(5,10,20,50,100,200,500))
+  countChange(300,List(500,5,50,100,20,200,10))
   
 }
