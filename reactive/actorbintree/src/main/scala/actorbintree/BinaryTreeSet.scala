@@ -110,6 +110,9 @@ object BinaryTreeNode {
 
   case object CopyFinished
 
+  case object CheckFinished
+
+
 
   def props(elem: Int, initiallyRemoved: Boolean) = Props(classOf[BinaryTreeNode], elem, initiallyRemoved)
 }
@@ -124,94 +127,55 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
   val rndIdForRemove: Int = Random.nextInt(1000000)
 
   // optional
-  def receive = initiallyRemoved match {
-    case false => normal
-    case true => removedReceive
-  }
+  def receive = normal
 
-  val removedReceive: Receive = {
-    case Insert(req, id, reqElem) =>
-      logMe("RInsert:", id, reqElem)
-            if (elem == reqElem) {
-        removed = false
-        context.become(normal)
-        req ! OperationFinished(id)
-      } else handleInsert(compare(elem, reqElem), req, id, reqElem)
-    case Contains(req, id, reqElem) =>
-      logMe("rContains:", id, reqElem)
-      if (elem == reqElem) {
-        req ! ContainsResult(id, !removed)
-      } else handleContains(compare(elem, reqElem), req, id, reqElem)
-    case Remove(req, id, reqElem) =>
-      logMe("RRemove:", id, reqElem)
-      if (elem == reqElem) {
-        req ! OperationFinished(id)
-      } else handleRemove(compare(elem, reqElem), req, id, reqElem)
-    //todo use the op: CopyTo notation
-    case CopyTo(treeNode) =>
-      if (subtrees isEmpty){
-        log.info("Told you!!")
-        context.parent ! CopyFinished
-      }
-      context.become(copying(subtrees.values.toSet, true))
-      subtrees foreach (node => node._2 ! CopyTo(treeNode))
-  }
   // optional
   /** Handles `Operation` messages and `CopyTo` requests. */
   val normal: Receive = {
     case Insert(req, id, reqElem) =>
-      logMe("Insert:", id, reqElem)
       if (elem == reqElem) {
+        removed = false
         req ! OperationFinished(id)
       } else handleInsert(compare(elem, reqElem), req, id, reqElem)
     case Contains(req, id, reqElem) =>
-      logMe("Contains:", id, reqElem)
       if (elem == reqElem) {
         req ! ContainsResult(id, !removed)
       } else handleContains(compare(elem, reqElem), req, id, reqElem)
     case Remove(req, id, reqElem) =>
-      logMe("Remove:", id, reqElem)
       if (elem == reqElem) {
-        context.become(removedReceive)
         removed = true
         req ! OperationFinished(id)
       } else handleRemove(compare(elem, reqElem), req, id, reqElem)
 
-      //todo use the op: CopyTo notation
     case CopyTo(treeNode) =>
-      context.become(copying(subtrees.values.toSet, false))
+      context.become(copying(subtrees.values.toSet, removed))
       subtrees foreach (node => node._2 ! CopyTo(treeNode))
-      treeNode ! Insert(self, rndIdForRemove, elem)
+      if (!removed) treeNode ! Insert(self, rndIdForRemove, elem)
+
+      self ! CheckFinished
   }
 
-  def logMe(msg: String, inId: Int, inElem: Int) = {
-//    log.info(msg + " Me: [{}] -->  Him: [{}]:[{}]", elem, inElem, inId)
-  }
+
   // optional
   /** `expected` is the set of ActorRefs whose replies we are waiting for,
     * `insertConfirmed` tracks whether the copy of this node to the new tree has been confirmed.
     */
   def copying(expected: Set[ActorRef], insertConfirmed: Boolean): Receive = {
-    case OperationFinished(id) => if (id == rndIdForRemove) {
-      if (expected.isEmpty){
-        context.parent ! CopyFinished
-      }else {
+    case OperationFinished(id) =>
+      if (id == rndIdForRemove) {
         context.become(copying(expected, true))
       }
-    }
-    case CopyFinished => {
-      val newExpected = expected.filter(ref => ref != sender)
-      sender ! PoisonPill
-      if (newExpected.isEmpty && insertConfirmed){
-        context.parent ! CopyFinished
-      }else{
-        context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
-      }
-//      context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
-//      sender ! PoisonPill
-//      self ! CheckFinished
-    }
+      self ! CheckFinished
 
+    case CopyFinished =>
+      sender ! PoisonPill
+      context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
+      self ! CheckFinished
+
+    case CheckFinished =>
+      if (expected.isEmpty && insertConfirmed) {
+        context.parent ! CopyFinished
+      }
   }
 
 
@@ -246,6 +210,6 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
     }
   }
 
-//  @throws[Exception](classOf[Exception])
-//  override def postStop(): Unit = log.info("Actor: {}, elem: {} stopped", self, elem)
+  //  @throws[Exception](classOf[Exception])
+  //  override def postStop(): Unit = log.info("Actor: {}, elem: {} stopped", self, elem)
 }

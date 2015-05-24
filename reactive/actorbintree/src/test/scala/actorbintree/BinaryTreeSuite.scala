@@ -149,7 +149,6 @@ with BeforeAndAfter {
     nonInVals foreach (ins => contains(topNode, ins, false))
     topNode ! GC
 
-    contains(topNode, -10, true)
     inVals diff toRemVals foreach (ins => contains(topNode, ins, true))
     toRemVals foreach (ins => contains(topNode, ins, false))
     nonInVals foreach (ins => contains(topNode, ins, false))
