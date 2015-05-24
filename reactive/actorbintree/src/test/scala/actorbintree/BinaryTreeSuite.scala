@@ -138,21 +138,21 @@ with BeforeAndAfter {
     val nonInVals = List(-20, -5, -11, -1, 4, 20)
     inVals foreach (ins => insert(topNode, ins))
 
-//    inVals foreach (ins => contains(topNode, ins, true))
-//    nonInVals foreach (ins => contains(topNode, ins, false))
+    inVals foreach (ins => contains(topNode, ins, true))
+    nonInVals foreach (ins => contains(topNode, ins, false))
 
     val toRemVals = List(-4, -2, 5, 20)
     toRemVals foreach (rm => remove(topNode, rm))
 
-//    inVals diff toRemVals foreach (ins => contains(topNode, ins, true))
-//    toRemVals foreach (ins => contains(topNode, ins, false))
-//    nonInVals foreach (ins => contains(topNode, ins, false))
+    inVals diff toRemVals foreach (ins => contains(topNode, ins, true))
+    toRemVals foreach (ins => contains(topNode, ins, false))
+    nonInVals foreach (ins => contains(topNode, ins, false))
     topNode ! GC
 
     contains(topNode, -10, true)
-//    inVals diff toRemVals foreach (ins => contains(topNode, ins, true))
-//    toRemVals foreach (ins => contains(topNode, ins, false))
-//    nonInVals foreach (ins => contains(topNode, ins, false))
+    inVals diff toRemVals foreach (ins => contains(topNode, ins, true))
+    toRemVals foreach (ins => contains(topNode, ins, false))
+    nonInVals foreach (ins => contains(topNode, ins, false))
 
   }
 

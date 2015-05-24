@@ -110,7 +110,6 @@ object BinaryTreeNode {
 
   case object CopyFinished
 
-  case object CheckFinished
 
   def props(elem: Int, initiallyRemoved: Boolean) = Props(classOf[BinaryTreeNode], elem, initiallyRemoved)
 }
@@ -150,6 +149,10 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
       } else handleRemove(compare(elem, reqElem), req, id, reqElem)
     //todo use the op: CopyTo notation
     case CopyTo(treeNode) =>
+      if (subtrees isEmpty){
+        log.info("Told you!!")
+        context.parent ! CopyFinished
+      }
       context.become(copying(subtrees.values.toSet, true))
       subtrees foreach (node => node._2 ! CopyTo(treeNode))
   }
@@ -190,19 +193,25 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
     */
   def copying(expected: Set[ActorRef], insertConfirmed: Boolean): Receive = {
     case OperationFinished(id) => if (id == rndIdForRemove) {
-      context.become(copying(expected, true))
-      self ! CheckFinished
-    }else{
-      log.info("Wrong id: {}", id)
+      if (expected.isEmpty){
+        context.parent ! CopyFinished
+      }else {
+        context.become(copying(expected, true))
+      }
     }
     case CopyFinished => {
-      context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
+      val newExpected = expected.filter(ref => ref != sender)
       sender ! PoisonPill
-      self ! CheckFinished
+      if (newExpected.isEmpty && insertConfirmed){
+        context.parent ! CopyFinished
+      }else{
+        context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
+      }
+//      context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
+//      sender ! PoisonPill
+//      self ! CheckFinished
     }
-    case CheckFinished => if (expected.isEmpty && insertConfirmed) {
-      context.parent ! CopyFinished
-    }
+
   }
 
 
