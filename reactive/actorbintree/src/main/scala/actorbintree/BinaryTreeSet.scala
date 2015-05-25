@@ -113,7 +113,6 @@ object BinaryTreeNode {
   case object CheckFinished
 
 
-
   def props(elem: Int, initiallyRemoved: Boolean) = Props(classOf[BinaryTreeNode], elem, initiallyRemoved)
 }
 
@@ -148,11 +147,14 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
       } else handleRemove(compare(elem, reqElem), req, id, reqElem)
 
     case CopyTo(treeNode) =>
-      context.become(copying(subtrees.values.toSet, removed))
-      subtrees foreach (node => node._2 ! CopyTo(treeNode))
-      if (!removed) treeNode ! Insert(self, rndIdForRemove, elem)
+      if (subtrees.isEmpty && removed) {
+        context.parent ! CopyFinished
+      } else {
+        context.become(copying(subtrees.values.toSet, removed))
+        subtrees foreach (node => node._2 ! CopyTo(treeNode))
+        if (!removed) treeNode ! Insert(self, rndIdForRemove, elem)
+      }
 
-      self ! CheckFinished
   }
 
 
@@ -168,7 +170,7 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
       self ! CheckFinished
 
     case CopyFinished =>
-      sender ! PoisonPill
+      if (expected contains(sender)) sender ! PoisonPill
       context.become(copying(expected.filter(ref => ref != sender), insertConfirmed))
       self ! CheckFinished
 

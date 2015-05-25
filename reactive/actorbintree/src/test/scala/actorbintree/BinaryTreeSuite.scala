@@ -158,7 +158,7 @@ with BeforeAndAfter {
   def remove(node: ActorRef, value: Int) = {
     val id = ids.next
     node ! Remove(testActor, id, value)
-    expectMsg(OperationFinished(id))
+    expectMsg(OperationFinished(id))`
   }
   def insert(node: ActorRef, value: Int) = {
     val id = ids.next
