@@ -56,6 +56,13 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   var replicators = Set.empty[ActorRef]
 
 
+  var _seqCounter = 0L
+  def nextSeq = {
+    val ret = _seqCounter
+    _seqCounter += 1
+    ret
+  }
+
   arbiter ! Join
 
   def receive = {
@@ -63,21 +70,53 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case JoinedSecondary => context.become(replica)
   }
 
+  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
+
   /* TODO Behavior for  the leader role. */
   val leader: Receive = {
     case Insert(key, value, id) =>
       kv += key -> value
+      secondaries foreach (_._2 ! Replicate(key, Some(value), id))
       sender ! OperationAck(id)
     case Remove(key, id) =>
       kv -= key
+      secondaries foreach (_._2 ! Replicate(key, None, id))
       sender ! OperationAck(id)
     case Get(key, id) =>
       sender ! GetResult(key, kv.get(key), id)
+    case Replicas(replicas) => {
+      val newSecondary = replicas filterNot (rep => rep == self) intersect secondaries.keySet head
+      val cooReplactor = context.actorOf(Replicator.props(newSecondary))
+      secondaries += newSecondary -> cooReplactor
+      replicators += cooReplactor
+
+      //todo how to validate the approved id
+      kv foreach(kvPairs => cooReplactor ! Replicate(kvPairs._1, Some(kvPairs._2), nextSeq))
+    }
+
+    case Terminated(replicator) =>
+      secondaries -= replicator
+      replicators -= replicator
+
     case _ =>
   }
 
+  var seqCounter = 0L
   /* TODO Behavior for the replica role. */
   val replica: Receive = {
+    case Get(key, id) =>
+      sender ! GetResult(key, kv.get(key), id)
+    case Snapshot(key, value, seq) =>
+      if (seqCounter > seq){
+        sender ! SnapshotAck(key, seq)
+      }else if (seqCounter == seq) {
+        value match {
+          case None => kv -= key
+          case Some(someValue) => kv += key -> someValue
+        }
+        seqCounter+=1
+        sender ! SnapshotAck(key, seq)
+      }
     case _ =>
   }
 
