@@ -44,19 +44,24 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   import Replicator._
   import Persistence._
   import context.dispatcher
+  import PersistenceManager._
 
   /*
    * The contents of this actor is just a suggestion, you can implement it in any way you like.
    */
 
+  val persistenceManager = context.actorOf(PersistenceManager.props(persistenceProps))
   var kv = Map.empty[String, String]
   // a map from secondary replicas to replicators
   var secondaries = Map.empty[ActorRef, ActorRef]
   // the current set of replicators
   var replicators = Set.empty[ActorRef]
 
+  var ids2Sender = Map.empty[Long, ActorRef]
+
 
   var _seqCounter = 0L
+
   def nextSeq = {
     val ret = _seqCounter
     _seqCounter += 1
@@ -77,7 +82,8 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case Insert(key, value, id) =>
       kv += key -> value
       secondaries foreach (_._2 ! Replicate(key, Some(value), id))
-      sender ! OperationAck(id)
+
+          sender ! OperationAck(id)
     case Remove(key, id) =>
       kv -= key
       secondaries foreach (_._2 ! Replicate(key, None, id))
@@ -87,11 +93,13 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case Replicas(replicas) => {
       val newSecondary = replicas filterNot (rep => rep == self) intersect secondaries.keySet head
       val cooReplactor = context.actorOf(Replicator.props(newSecondary))
+      context.watch(newSecondary)
+
       secondaries += newSecondary -> cooReplactor
       replicators += cooReplactor
 
       //todo how to validate the approved id
-      kv foreach(kvPairs => cooReplactor ! Replicate(kvPairs._1, Some(kvPairs._2), nextSeq))
+      kv foreach (kvPairs => cooReplactor ! Replicate(kvPairs._1, Some(kvPairs._2), nextSeq))
     }
 
     case Terminated(replicator) =>
@@ -107,16 +115,27 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case Get(key, id) =>
       sender ! GetResult(key, kv.get(key), id)
     case Snapshot(key, value, seq) =>
-      if (seqCounter > seq){
+      if (seqCounter > seq) {
         sender ! SnapshotAck(key, seq)
-      }else if (seqCounter == seq) {
+      } else if (seqCounter == seq) {
         value match {
           case None => kv -= key
           case Some(someValue) => kv += key -> someValue
         }
-        seqCounter+=1
-        sender ! SnapshotAck(key, seq)
+        seqCounter += 1
+
+        persistenceManager ! Persist(key, value, seq)
+        ids2Sender += seq -> sender
+//        sender ! SnapshotAck(key, seq)
       }
+
+
+    case PersistSuccess(id) =>
+      ids2Sender.get(id) foreach (_ ! OperationAck(id))
+      ids2Sender -= id
+    case PersistFailed(id) =>
+      ids2Sender.get(id) foreach (_ ! OperationFailed(id))
+      ids2Sender -= id
     case _ =>
   }
 
