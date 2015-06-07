@@ -1,16 +1,13 @@
 package kvstore
 
-import akka.actor.{OneForOneStrategy, Props, ActorRef, Actor}
+import akka.actor._
 import kvstore.Arbiter._
+import kvstore.Persistence.{Persisted, Persist, PersistenceException}
 import scala.collection.immutable.Queue
-import akka.actor.SupervisorStrategy.Restart
+import akka.actor.SupervisorStrategy.{Stop, Restart}
 import scala.annotation.tailrec
 import akka.pattern.{ask, pipe}
-import akka.actor.Terminated
 import scala.concurrent.duration._
-import akka.actor.PoisonPill
-import akka.actor.OneForOneStrategy
-import akka.actor.SupervisorStrategy
 import akka.util.Timeout
 
 object Replica {
@@ -38,7 +35,7 @@ object Replica {
   def props(arbiter: ActorRef, persistenceProps: Props): Props = Props(new Replica(arbiter, persistenceProps))
 }
 
-class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
+class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor with ActorLogging {
 
   import Replica._
   import Replicator._
@@ -57,8 +54,8 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   // the current set of replicators
   var replicators = Set.empty[ActorRef]
 
-  var ids2Sender = Map.empty[Long, ActorRef]
 
+  var persistMap = Map.empty[String, (ActorRef, Long)]
 
   var _seqCounter = 0L
 
@@ -75,22 +72,20 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case JoinedSecondary => context.become(replica)
   }
 
-  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
-
   /* TODO Behavior for  the leader role. */
   val leader: Receive = {
     case Insert(key, value, id) =>
       kv += key -> value
       secondaries foreach (_._2 ! Replicate(key, Some(value), id))
 
-          sender ! OperationAck(id)
+      sender ! OperationAck(id)
     case Remove(key, id) =>
       kv -= key
       secondaries foreach (_._2 ! Replicate(key, None, id))
       sender ! OperationAck(id)
     case Get(key, id) =>
       sender ! GetResult(key, kv.get(key), id)
-    case Replicas(replicas) => {
+    case Replicas(replicas) =>
       val newSecondary = replicas filterNot (rep => rep == self) intersect secondaries.keySet head
       val cooReplactor = context.actorOf(Replicator.props(newSecondary))
       context.watch(newSecondary)
@@ -100,9 +95,9 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
       //todo how to validate the approved id
       kv foreach (kvPairs => cooReplactor ! Replicate(kvPairs._1, Some(kvPairs._2), nextSeq))
-    }
 
     case Terminated(replicator) =>
+      secondaries.get(replicator).foreach(context.stop(_))
       secondaries -= replicator
       replicators -= replicator
 
@@ -115,29 +110,38 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case Get(key, id) =>
       sender ! GetResult(key, kv.get(key), id)
     case Snapshot(key, value, seq) =>
+      log.info("[r] Got snapshot: {}", key)
       if (seqCounter > seq) {
         sender ! SnapshotAck(key, seq)
       } else if (seqCounter == seq) {
         value match {
           case None => kv -= key
-          case Some(someValue) => kv += key -> someValue
+            log.info("[r] None: {}", key)
+          case Some(someValue) =>
+            log.info("[r] Some: {}", key)
+            kv += key -> someValue
         }
         seqCounter += 1
 
         persistenceManager ! Persist(key, value, seq)
-        ids2Sender += seq -> sender
-//        sender ! SnapshotAck(key, seq)
+        //        val persister = context.actorOf(persistenceProps)
+        //        persister ! Persist(key, value, seq)
+        persistMap += key ->(sender, seq)
       }
 
 
-    case PersistSuccess(id) =>
-      ids2Sender.get(id) foreach (_ ! OperationAck(id))
-      ids2Sender -= id
-    case PersistFailed(id) =>
-      ids2Sender.get(id) foreach (_ ! OperationFailed(id))
-      ids2Sender -= id
+    case PersistSuccess(key) =>
+      log.info("[r] Persisten success: {}", key)
+      persistMap.get(key).foreach(elem => elem._1 ! SnapshotAck(key, elem._2))
+      persistMap -= key
+
     case _ =>
   }
 
 }
+
+
+
+
+
 

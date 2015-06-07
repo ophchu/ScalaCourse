@@ -30,7 +30,8 @@ class Step4_SecondaryPersistenceSpec extends TestKit(ActorSystem("Step4Secondary
     val arbiter = TestProbe()
     val persistence = TestProbe()
     val replicator = TestProbe()
-    val secondary = system.actorOf(Replica.props(arbiter.ref, probeProps(persistence)), "case1-secondary")
+//    val secondary = system.actorOf(Replica.props(arbiter.ref, probeProps(persistence)), "case1-secondary")
+    val secondary = system.actorOf(Replica.props(arbiter.ref, Persistence.props(flaky = true)), "case1-secondary")
     val client = session(secondary)
 
     arbiter.expectMsg(Join)
@@ -60,7 +61,8 @@ class Step4_SecondaryPersistenceSpec extends TestKit(ActorSystem("Step4Secondary
     val arbiter = TestProbe()
     val persistence = TestProbe()
     val replicator = TestProbe()
-    val secondary = system.actorOf(Replica.props(arbiter.ref, probeProps(persistence)), "case2-secondary")
+//    val secondary = system.actorOf(Replica.props(arbiter.ref, probeProps(persistence)), "case2-secondary")
+    val secondary = system.actorOf(Replica.props(arbiter.ref, Persistence.props(flaky = true)), "case2-secondary")
     val client = session(secondary)
 
     arbiter.expectMsg(Join)
